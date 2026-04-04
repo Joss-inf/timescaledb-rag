@@ -4,6 +4,7 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from structlog import get_logger
 
 from rag_timescale.parsers.base import BaseParser, ParsedDocument
