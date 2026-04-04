@@ -99,34 +99,38 @@ async def list_api_keys(owner_key_id: uuid.UUID) -> list[dict]:
 
 async def get_key_by_hash(raw_key: str) -> dict | None:
     pool = await get_pool()
+    
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
-            SELECT id, key_hash, name, permissions, expires_at, is_active
-            FROM api_keys
-            WHERE is_active = TRUE
-            """
+            "SELECT id, key_hash, name, permissions, expires_at FROM api_keys WHERE is_active = TRUE"
         )
 
-    for row in rows:
-        if verify_api_key(raw_key, row["key_hash"]):
-            if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc):
-                log.info("api_key_expired", key_id=str(row["id"]))
-                return None
+        target_row = None
+     
+        for row in rows:
+            if verify_api_key(raw_key, row["key_hash"]):
+                target_row = row
+                break
+        
+        if not target_row:
+            return None
 
-            await conn.execute(
-                "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
-                row["id"],
-            )
+        if target_row["expires_at"] and target_row["expires_at"] < datetime.now(timezone.utc):
+            log.info("api_key_expired", key_id=str(target_row["id"]))
+            # Optionnel : on pourrait désactiver la clé automatiquement ici
+            return None
 
-            return {
-                "id": row["id"],
-                "name": row["name"],
-                "permissions": row["permissions"],
-                "expires_at": row["expires_at"],
-            }
+        await conn.execute(
+            "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
+            target_row["id"],
+        )
 
-    return None
+        return {
+            "id": target_row["id"],
+            "name": target_row["name"],
+            "permissions": target_row["permissions"],
+            "expires_at": target_row["expires_at"],
+        }
 
 
 async def check_collection_access(
