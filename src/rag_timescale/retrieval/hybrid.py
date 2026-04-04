@@ -26,24 +26,29 @@ async def hybrid_search(
 ) -> tuple[list[SearchResult], int]:
     query_embedding = generate_embedding(query)
     pool = await get_pool()
+    
+    # On prépare les filtres en JSON pour PostgreSQL
+    # S'il n'y a pas de filtres, on envoie un objet JSON vide {}
+    sql_filters = json.dumps(filters) if filters else "{}"
 
     async with pool.acquire() as conn:
+        # On ajoute le $10 pour correspondre au paramètre p_filters de ta fonction SQL
         rows = await conn.fetch(
             """
             SELECT * FROM hybrid_search(
-                $1, $2, $3,
-                $4, $5, $6, $7, $8, $9
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
             )
             """,
-            collection_id,
-            query,
-            query_embedding,
-            bm25_limit,
-            vector_limit,
-            bm25_weight,
-            vector_weight,
-            rrf_k,
-            top_k * 2,
+            collection_id,      # $1
+            query,              # $2
+            query_embedding,    # $3
+            bm25_limit,         # $4
+            vector_limit,       # $5
+            bm25_weight,        # $6
+            vector_weight,      # $7
+            rrf_k,              # $8
+            top_k * 2,          # $9 (p_match_count)
+            sql_filters         # $10 (p_filters)
         )
 
     results: list[SearchResult] = []
@@ -62,7 +67,7 @@ async def hybrid_search(
         )
 
     total_searched = len(results)
-    log.info("hybrid_search_completed", query=query, total_results=len(results), total_searched=total_searched)
+    log.info("hybrid_search_completed", query=query, total_results=len(results), filters=filters)
     return results, total_searched
 
 
@@ -97,7 +102,7 @@ async def hybrid_search_with_rerank(
     ranked_indices = rerank(query, documents, top_k=top_k)
 
     reranked = []
-    for _rank, (orig_idx, rerank_score) in enumerate(ranked_indices):
+    for orig_idx, rerank_score in ranked_indices:
         result = results[orig_idx]
         result.score = rerank_score
         reranked.append(result)
