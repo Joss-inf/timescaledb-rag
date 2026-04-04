@@ -49,17 +49,35 @@ class HierarchicalChunker(BaseChunker):
         return ChunkResult(chunks=chunks)
 
     def _parse_sections(self, text: str) -> list[tuple[int, str, str]]:
-        matches = list(_HEADING_RE.finditer(text))
-        if not matches:
+        
+        all_matches = list(_HEADING_RE.finditer(text))
+        if not all_matches:
+            return [(0, "Document", text)]
+        
+        code_blocks = []
+        block_matches = list(_MARKDOWN_BLOCK_RE.finditer(text))
+   
+        for i in range(0, len(block_matches) - 1, 2):
+            code_blocks.append((block_matches[i].start(), block_matches[i+1].end()))
+
+        valid_matches = []
+        for m in all_matches:
+            is_inside_code = any(start <= m.start() <= end for start, end in code_blocks)
+            if not is_inside_code:
+                valid_matches.append(m)
+
+        if not valid_matches:
             return [(0, "Document", text)]
 
         sections: list[tuple[int, str, str]] = []
-        for i, match in enumerate(matches):
+        for i, match in enumerate(valid_matches):
             level = len(match.group(1))
             title = match.group(2).strip()
             start = match.end()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            
+            end = valid_matches[i + 1].start() if i + 1 < len(valid_matches) else len(text)
             content = text[start:end].strip()
+            
             sections.append((level, title, content))
 
         return sections
