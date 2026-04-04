@@ -67,13 +67,13 @@ async def create_api_key(
 async def revoke_api_key(key_id: uuid.UUID) -> bool:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE api_keys SET is_active = FALSE WHERE id = $1 AND is_active = TRUE
-            """,
+
+        status = await conn.execute(
+            "UPDATE api_keys SET is_active = FALSE WHERE id = $1 AND is_active = TRUE",
             key_id,
         )
-    revoked = result == "UPDATE 1"
+    
+    revoked = status == "UPDATE 1"
     if revoked:
         log.info("api_key_revoked", key_id=str(key_id))
     return revoked
