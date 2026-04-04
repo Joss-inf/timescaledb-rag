@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from structlog import get_logger
 
 from rag_timescale.api import collections, documents, keys, permissions, search
@@ -52,6 +53,14 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok"}
+        from rag_timescale.db.connection import get_pool
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute("SELECT 1")
+            return {"status": "ok", "database": "connected"}
+        except Exception as e:
+            log.error("health_check_failed", error=str(e))
+            return JSONResponse(status_code=503, content={"status": "error", "database": "disconnected"})
 
     return app
