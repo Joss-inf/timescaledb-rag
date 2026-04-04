@@ -8,10 +8,9 @@ from rag_timescale.api.deps import RequireKey
 from rag_timescale.auth.keys import create_api_key, revoke_api_key
 from rag_timescale.models import APIKeyCreate, APIKeyResponse
 
-router = APIRouter(prefix="/api/v1", tags=["auth"])
+router = APIRouter()
 
-
-@router.post("/keys", response_model=APIKeyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=APIKeyResponse, status_code=status.HTTP_201_CREATED)
 async def create_key(body: APIKeyCreate):
     raw_key, key_data = await create_api_key(
         name=body.name,
@@ -28,7 +27,7 @@ async def create_key(body: APIKeyCreate):
     )
 
 
-@router.delete("/keys/{key_id}")
+@router.delete("/{key_id}")
 async def delete_key(key_id: uuid.UUID, key_info: RequireKey):
     if key_info["id"] != key_id:
         raise HTTPException(

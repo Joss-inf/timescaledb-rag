@@ -1,34 +1,31 @@
 from __future__ import annotations
 
 from typing import Any
-
 import pdfplumber
-
 from rag_timescale.parsers.base import BaseParser, ParsedDocument
+import io
 
 
 class PDFParser(BaseParser):
     def parse(self, file_path: str | bytes, metadata: dict[str, Any] | None = None) -> ParsedDocument:
         text_parts: list[str] = []
-        page_texts: list[str] = []
-
-        if isinstance(file_path, bytes):
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
+        doc_metadata = metadata or {}
+        
+        try:
+            source = io.BytesIO(file_path) if isinstance(file_path, bytes) else file_path
+            
+            with pdfplumber.open(source) as pdf:
+                for i, page in enumerate(pdf.pages):
                     page_text = page.extract_text() or ""
-                    page_texts.append(page_text)
-                    text_parts.append(page_text)
-        else:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text() or ""
-                    page_texts.append(page_text)
-                    text_parts.append(page_text)
+                    if page_text.strip():
+                        text_parts.append(f"[[PAGE_{i+1}]]\n{page_text}")
+                
+                doc_metadata["page_count"] = len(pdf.pages)
+                
+        except Exception as e:
+            raise ValueError(f"Erreur lors de l'extraction du PDF : {str(e)}")
 
         full_text = "\n\n".join(text_parts)
-        doc_metadata = metadata or {}
-        doc_metadata["page_count"] = len(page_texts)
-        doc_metadata["page_texts"] = page_texts
 
         return ParsedDocument(
             text=full_text,

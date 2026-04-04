@@ -132,7 +132,9 @@ class SearchRequest(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     bm25_weight: float | None = None
     vector_weight: float | None = None
-
+    diskann_search_list: int | None = None   # par défaut 200 
+    diskann_rescore: int | None = None       # par défaut 100
+    
 
 class SearchResponse(BaseModel):
     query: str

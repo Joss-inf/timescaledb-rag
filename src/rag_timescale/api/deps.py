@@ -13,20 +13,26 @@ from rag_timescale.models import AccessLevel
 _bearer = HTTPBearer(auto_error=False)
 
 
-async def _extract_key(request: Request, bearer: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> str | None:
+async def _extract_key(
+    request: Request,
+    bearer: HTTPAuthorizationCredentials | None = Depends(_bearer)
+) -> str | None:
+    """Extrait la clé API du header Authorization (Bearer) ou X-API-Key."""
     if bearer and bearer.credentials:
         return bearer.credentials
-    api_key = request.headers.get("X-API-Key", "")
+    api_key = request.headers.get("X-API-Key")
     return api_key if api_key else None
 
 
 async def _get_optional_key(creds: str | None = Depends(_extract_key)) -> dict | None:
+    """Retourne les infos de la clé si fournie et valide, sinon None."""
     if not creds:
         return None
     return await authenticate_key(creds)
 
 
 async def _get_required_key(creds: str | None = Depends(_extract_key)) -> dict:
+    """Retourne les infos de la clé ou lève 401."""
     if not creds:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,12 +48,31 @@ async def _get_required_key(creds: str | None = Depends(_extract_key)) -> dict:
     return key_info
 
 
-async def _check_access(collection_id: uuid.UUID, key_info: dict, level: AccessLevel) -> dict:
-    has_access = await check_collection_access(
-        key_id=key_info["id"],
-        collection_id=collection_id,
-        required_level=level,
-    )
+# Cache simple pour les vérifications d'accès (TTL 5 secondes)
+_access_cache: dict[tuple[str, str, str], tuple[float, bool]] = {}
+CACHE_TTL = 5.0
+
+
+async def _check_access(
+    collection_id: uuid.UUID,
+    key_info: dict,
+    level: AccessLevel
+) -> dict:
+    """Vérifie l'accès avec cache court."""
+    cache_key = (str(collection_id), str(key_info["id"]), level.value)
+    import time
+    now = time.time()
+    cached = _access_cache.get(cache_key)
+    if cached and now - cached[0] < CACHE_TTL:
+        has_access = cached[1]
+    else:
+        has_access = await check_collection_access(
+            key_id=key_info["id"],
+            collection_id=collection_id,
+            required_level=level,
+        )
+        _access_cache[cache_key] = (now, has_access)
+
     if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -56,29 +81,32 @@ async def _check_access(collection_id: uuid.UUID, key_info: dict, level: AccessL
     return key_info
 
 
-async def get_read_access(collection_id: uuid.UUID, key_info: dict = Depends(_get_required_key)) -> dict:
-    return await _check_access(collection_id, key_info, AccessLevel.READ)
+def _get_access_dependency(level: AccessLevel):
+    """Factory pour créer une dépendance d'accès paramétrée."""
+    async def dependency(
+        collection_id: uuid.UUID,
+        key_info: dict = Depends(_get_required_key)
+    ) -> dict:
+        return await _check_access(collection_id, key_info, level)
+    return dependency
 
 
-async def get_write_access(collection_id: uuid.UUID, key_info: dict = Depends(_get_required_key)) -> dict:
-    return await _check_access(collection_id, key_info, AccessLevel.WRITE)
+# Exports des dépendances publiques
+RequireRead = Annotated[dict, Depends(_get_access_dependency(AccessLevel.READ))]
+RequireWrite = Annotated[dict, Depends(_get_access_dependency(AccessLevel.WRITE))]
+RequireAdmin = Annotated[dict, Depends(_get_access_dependency(AccessLevel.ADMIN))]
+OptionalKey = Annotated[dict | None, Depends(_get_optional_key)]
+RequireKey = Annotated[dict, Depends(_get_required_key)]
 
 
-async def get_admin_access(collection_id: uuid.UUID, key_info: dict = Depends(_get_required_key)) -> dict:
-    return await _check_access(collection_id, key_info, AccessLevel.ADMIN)
-
-
-async def verify_key_ownership(key_id: uuid.UUID, key_info: dict = Depends(_get_required_key)) -> dict:
+async def verify_key_ownership(
+    key_id: uuid.UUID,
+    key_info: dict = Depends(_get_required_key)
+) -> dict:
+    """Vérifie que la clé authentifiée est bien celle demandée."""
     if key_info["id"] != key_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only manage your own API keys",
         )
     return key_info
-
-
-OptionalKey = Annotated[dict | None, Depends(_get_optional_key)]
-RequireKey = Annotated[dict, Depends(_get_required_key)]
-RequireRead = Annotated[dict, Depends(get_read_access)]
-RequireWrite = Annotated[dict, Depends(get_write_access)]
-RequireAdmin = Annotated[dict, Depends(get_admin_access)]

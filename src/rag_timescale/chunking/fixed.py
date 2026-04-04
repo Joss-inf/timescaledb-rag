@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from rag_timescale.chunking.base import BaseChunker, Chunk, ChunkResult
 
 
 class FixedChunker(BaseChunker):
-    def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
-        
+    async def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._chunk_sync, text, metadata)
+
+    def _chunk_sync(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
         words = text.split()
         num_words = len(words)
         chunks: list[Chunk] = []

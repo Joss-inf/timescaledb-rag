@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -9,23 +10,23 @@ _SECTION_RE = re.compile(r"^(#{1,6}\s+.+)$", re.MULTILINE)
 
 
 class SectionChunker(BaseChunker):
-    def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
+    async def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
+        """Version asynchrone : exécute le découpage dans un thread."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._chunk_sync, text, metadata)
+
+    def _chunk_sync(self, text: str, metadata: dict[str, Any] | None) -> ChunkResult:
+        """Logique synchrone originale."""
         sections = self._split_by_sections(text)
         chunks: list[Chunk] = []
+        base_meta = metadata or {}
 
         for title, content in sections:
-            if len(content.split()) > self.max_chunk_size:
-                leaf_chunks = self._split_content(content, title, metadata)
-                chunks.extend(leaf_chunks)
-            elif len(content.split()) >= self.min_chunk_size:
-                chunks.append(
-                    Chunk(
-                        content=content.strip(),
-                        chunk_level=1,
-                        section_path=[title],
-                        metadata=metadata or {},
-                    )
-                )
+            word_count = len(content.split())
+            if word_count > self.max_chunk_size:
+                chunks.extend(self._split_content(content, title, base_meta))
+            elif word_count >= self.min_chunk_size:
+                chunks.append(self._make_chunk(content.strip(), title, base_meta))
 
         return ChunkResult(chunks=chunks)
 
@@ -44,21 +45,23 @@ class SectionChunker(BaseChunker):
 
         return sections
 
-    def _split_content(self, content: str, title: str, metadata: dict[str, Any] | None) -> list[Chunk]:
+    def _split_content(self, content: str, title: str, metadata: dict[str, Any]) -> list[Chunk]:
         words = content.split()
-        chunks: list[Chunk] = []
         step = self.chunk_size - self.overlap
+        chunks = []
 
         for i in range(0, len(words), step):
-            segment = " ".join(words[i : i + self.chunk_size])
-            if len(segment.split()) >= self.min_chunk_size:
-                chunks.append(
-                    Chunk(
-                        content=segment,
-                        chunk_level=1,
-                        section_path=[title],
-                        metadata=metadata or {},
-                    )
-                )
+            segment_words = words[i:i + self.chunk_size]
+            segment = " ".join(segment_words)
+            if len(segment_words) >= self.min_chunk_size:
+                chunks.append(self._make_chunk(segment, title, metadata))
 
         return chunks
+
+    def _make_chunk(self, content: str, title: str, metadata: dict[str, Any]) -> Chunk:
+        return Chunk(
+            content=content,
+            chunk_level=1,
+            section_path=[title],
+            metadata=metadata,
+        )

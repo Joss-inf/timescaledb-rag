@@ -4,11 +4,15 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
+from structlog import get_logger
+
 from rag_timescale.parsers.base import BaseParser, ParsedDocument
 from rag_timescale.parsers.docx import DOCXParser
 from rag_timescale.parsers.html import HTMLParser
 from rag_timescale.parsers.pdf import PDFParser
 from rag_timescale.parsers.txt import TextParser
+
+log = get_logger()
 
 _REGISTRY: dict[str, BaseParser] = {
     "application/pdf": PDFParser(),
@@ -57,8 +61,25 @@ def parse_document(
     filename: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> ParsedDocument:
-    parser = get_parser(file_path=filename if isinstance(file_path, bytes) else file_path)
-    return parser.parse(file_path, metadata)
+    try:
+        # 1. Sélection du parser (avec sécurité si filename est None)
+        parser = get_parser(file_path=filename if isinstance(file_path, bytes) else file_path)
+        
+        # 2. Tentative de parsing
+        return parser.parse(file_path, metadata)
+        
+    except ValueError as ve:
+        # Erreurs de contenu connues (ex: encodage texte invalide)
+        log.error("parsing_content_error", filename=filename, error=str(ve))
+        raise HTTPException(status_code=400, detail=str(ve))
+        
+    except Exception as e:
+        # Erreurs imprévues (ex: PDF corrompu, bibliothèque DOCX qui crash)
+        log.error("parsing_unexpected_error", filename=filename, error=str(e))
+        raise HTTPException(
+            status_code=422, 
+            detail=f"Le fichier '{filename}' n'a pas pu être traité. Il est peut-être corrompu ou protégé."
+        )
 
 
 def register_parser(mime_type: str, parser: BaseParser) -> None:

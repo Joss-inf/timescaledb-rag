@@ -43,5 +43,6 @@ class BaseChunker(ABC):
         self.max_chunk_size = max_chunk_size
 
     @abstractmethod
-    def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
+    async def chunk(self, text: str, metadata: dict[str, Any] | None = None) -> ChunkResult:
+        """Découpe le texte en chunks de manière asynchrone."""
         pass
