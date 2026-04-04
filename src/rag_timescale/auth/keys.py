@@ -86,10 +86,9 @@ async def list_api_keys(owner_key_id: uuid.UUID) -> list[dict]:
             """
             SELECT id, name, created_at, expires_at, last_used_at, is_active
             FROM api_keys
-            WHERE id = $1 OR EXISTS (
-                SELECT 1 FROM collections c
-                WHERE c.owner_key_id = $1
-            )
+            WHERE id = $1 
+               OR id IN (SELECT api_key_id FROM collection_access WHERE collection_id IN 
+                            (SELECT id FROM collections WHERE owner_key_id = $1))
             ORDER BY created_at DESC
             """,
             owner_key_id,
