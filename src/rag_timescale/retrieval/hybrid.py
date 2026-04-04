@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any
 
@@ -32,7 +33,7 @@ async def hybrid_search(
     sql_filters = json.dumps(filters) if filters else "{}"
 
     async with pool.acquire() as conn:
-        # On ajoute le $10 pour correspondre au paramètre p_filters de ta fonction SQL
+        
         rows = await conn.fetch(
             """
             SELECT * FROM hybrid_search(
