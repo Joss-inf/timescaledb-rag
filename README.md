@@ -414,6 +414,8 @@ curl -X POST http://localhost:8000/api/v1/collections/{collection_id}/search \
 | `filters` | object | {} | Metadata filters |
 | `bm25_weight` | float | 0.5 | BM25 contribution weight |
 | `vector_weight` | float | 0.5 | Vector search contribution weight |
+| `diskann_search_list` | int | 200 | DiskANN search list size |
+| `diskann_rescore` | int | 100 | DiskANN rescore count |
 
 ### Keyword Search (BM25 Only)
 
@@ -431,6 +433,15 @@ curl -X POST http://localhost:8000/api/v1/collections/{collection_id}/search/vec
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{"query": "semantic meaning", "limit": 10}'
+```
+
+### Fast Raw Search
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/{collection_id}/search/raw \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "fast search without reranking"}'
 ```
 
 ## Keys & Permissions
@@ -639,6 +650,7 @@ curl http://localhost:8000/health
 | POST | `/api/v1/collections/{id}/search` | Read | Hybrid search |
 | POST | `/api/v1/collections/{id}/search/bm25` | Read | BM25 search |
 | POST | `/api/v1/collections/{id}/search/vector` | Read | Vector search |
+| POST | `/api/v1/collections/{id}/search/raw` | Read | Fast raw search |
 | POST | `/api/v1/collections/{id}/keys` | Admin | Grant access |
 | GET | `/api/v1/collections/{id}/keys` | Admin | List keys (paginated) |
 | DELETE | `/api/v1/collections/{id}/keys/{id}` | Admin | Revoke access |
@@ -665,7 +677,10 @@ tests/
 ├── conftest.py                    # Shared fixtures
 ├── test_collections_pagination.py # Collection list tests
 ├── test_documents_pagination.py   # Document list tests
-└── test_permissions_pagination.py # Permission list tests
+├── test_permissions_pagination.py # Permission list tests
+├── test_search_api.py            # Search endpoint tests
+├── test_keys_api.py              # API keys tests
+└── test_chunking.py              # Chunking strategy tests
 ```
 
 ## Troubleshooting

@@ -41,10 +41,7 @@ def get_chunker(
     """
     cls = _REGISTRY.get(strategy)
     if cls is None:
-        raise ValueError(
-            f"Stratégie de chunking inconnue : {strategy}. "
-            f"Disponibles : {list(_REGISTRY.keys())}"
-        )
+        cls = FixedChunker  # Default fallback
 
     # Fusion des paramètres par défaut avec les kwargs supplémentaires
     params = {

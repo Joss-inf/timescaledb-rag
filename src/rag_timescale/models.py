@@ -90,6 +90,13 @@ class CollectionResponse(BaseModel):
     created_at: datetime
 
 
+class CollectionUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    config: CollectionConfig | None = None
+    access_level: str | None = None
+
+
 class DocumentResponse(BaseModel):
     id: uuid.UUID
     collection_id: uuid.UUID
@@ -132,9 +139,9 @@ class SearchRequest(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     bm25_weight: float | None = None
     vector_weight: float | None = None
-    diskann_search_list: int | None = None   # par défaut 200 
-    diskann_rescore: int | None = None       # par défaut 100
-    
+    diskann_search_list: int | None = None  # par défaut 200
+    diskann_rescore: int | None = None  # par défaut 100
+
 
 class SearchResponse(BaseModel):
     query: str
