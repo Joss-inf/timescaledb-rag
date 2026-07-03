@@ -1,4 +1,4 @@
-# RAG Timescale API
+# Industrial RAG API
 
 Enterprise RAG (Retrieval-Augmented Generation) system with TimescaleDB, hybrid search, and intelligent chunking.
 
